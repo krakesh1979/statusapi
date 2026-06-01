@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import time
 from threading import Lock
 
@@ -8,6 +8,54 @@ app = Flask(__name__)
 # For production, replace this with Redis, MongoDB, PostgreSQL, etc.
 jobs = {}
 lock = Lock()
+
+JOB_STEPS = [
+    {"event": "data_load", "step": "Load Data"},
+    {"event": "process_records", "step": "Process Records"},
+    {"event": "report_gen", "step": "Generate Report"},
+]
+TOTAL_DURATION_SEC = 20
+STEP_DURATION_SEC = TOTAL_DURATION_SEC / len(JOB_STEPS)
+
+
+def build_status_payload(elapsed):
+    steps = []
+    current_step_num = 1
+
+    for i, step_def in enumerate(JOB_STEPS):
+        step_start = i * STEP_DURATION_SEC
+        step_end = (i + 1) * STEP_DURATION_SEC
+        entry = {
+            "event": step_def["event"],
+            "step": step_def["step"],
+        }
+
+        if elapsed >= step_end:
+            entry["status"] = "completed"
+            entry["duration_ms"] = int(STEP_DURATION_SEC * 1000)
+        elif elapsed >= step_start:
+            entry["status"] = "in_progress"
+            entry["duration_ms"] = int((elapsed - step_start) * 1000)
+            current_step_num = i + 1
+        else:
+            entry["status"] = "pending"
+
+        steps.append(entry)
+
+    if elapsed >= TOTAL_DURATION_SEC:
+        return {
+            "status": "success",
+            "message": "Job completed successfully",
+            "progress": 100,
+            "steps": steps,
+        }
+
+    return {
+        "status": "running",
+        "message": f"Processing step {current_step_num} of {len(JOB_STEPS)}",
+        "progress": int((current_step_num / len(JOB_STEPS)) * 100),
+        "steps": steps,
+    }
 
 
 @app.get("/")
@@ -23,9 +71,6 @@ def start_job(job_id):
     with lock:
         jobs[job_id] = {
             "start_time": time.time(),
-            "status": "pending",
-            "progress": 0,
-            "message": "Job started"
         }
 
     return jsonify({
@@ -46,33 +91,27 @@ def get_job_status(job_id):
             }), 404
 
         job = jobs[job_id]
-        elapsed = time.time() - job["start_time"]
+        elapsed_override = request.args.get("elapsed")
+        if elapsed_override is not None:
+            try:
+                elapsed = float(elapsed_override)
+            except ValueError:
+                return jsonify({
+                    "job_id": job_id,
+                    "status": "bad_request",
+                    "message": "Query param 'elapsed' must be a number (seconds)."
+                }), 400
 
-        if elapsed < 10:
-            job["status"] = "running"
-            job["progress"] = int((elapsed / 20) * 100)
-            job["message"] = f"Processing... {int(elapsed)}s elapsed"
-
-        elif elapsed < 20:
-            job["status"] = "running"
-            job["progress"] = int((elapsed / 20) * 100)
-            job["message"] = f"Still processing... {int(elapsed)}s elapsed"
-
+            if elapsed < 0:
+                return jsonify({
+                    "job_id": job_id,
+                    "status": "bad_request",
+                    "message": "Query param 'elapsed' must be >= 0."
+                }), 400
         else:
-            job["status"] = "success"
-            job["progress"] = 100
-            job["message"] = "Job completed successfully"
-            job["result"] = {
-                "data": "final output"
-            }
+            elapsed = time.time() - job["start_time"]
 
-        return jsonify({
-            "job_id": job_id,
-            "status": job["status"],
-            "progress": job["progress"],
-            "message": job["message"],
-            "result": job.get("result")
-        })
+        return jsonify(build_status_payload(elapsed))
 
 
 if __name__ == "__main__":
