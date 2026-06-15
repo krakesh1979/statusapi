@@ -19,42 +19,44 @@ STEP_DURATION_SEC = TOTAL_DURATION_SEC / len(JOB_STEPS)
 
 
 def build_status_payload(elapsed):
-    steps = []
-    current_step_num = 1
-
-    for i, step_def in enumerate(JOB_STEPS):
-        step_start = i * STEP_DURATION_SEC
-        step_end = (i + 1) * STEP_DURATION_SEC
-        entry = {
-            "event": step_def["event"],
-            "step": step_def["step"],
-        }
-
-        if elapsed >= step_end:
-            entry["status"] = "completed"
-            entry["duration_ms"] = int(STEP_DURATION_SEC * 1000)
-        elif elapsed >= step_start:
-            entry["status"] = "in_progress"
-            entry["duration_ms"] = int((elapsed - step_start) * 1000)
-            current_step_num = i + 1
-        else:
-            entry["status"] = "pending"
-
-        steps.append(entry)
-
+    # Job completed - return final step
     if elapsed >= TOTAL_DURATION_SEC:
+        last_step = JOB_STEPS[-1]
         return {
             "status": "success",
             "message": "Job completed successfully",
             "progress": 100,
-            "steps": steps,
+            "current_step": {
+                "event": last_step["event"],
+                "step": last_step["step"],
+                "status": "completed",
+                "duration_ms": int(STEP_DURATION_SEC * 1000)
+            }
         }
+
+    # Find current step
+    current_step_num = 1
+    current_step_info = None
+
+    for i, step_def in enumerate(JOB_STEPS):
+        step_start = i * STEP_DURATION_SEC
+        step_end = (i + 1) * STEP_DURATION_SEC
+
+        if elapsed >= step_start and elapsed < step_end:
+            current_step_num = i + 1
+            current_step_info = {
+                "event": step_def["event"],
+                "step": step_def["step"],
+                "status": "in_progress",
+                "duration_ms": int((elapsed - step_start) * 1000)
+            }
+            break
 
     return {
         "status": "running",
         "message": f"Processing step {current_step_num} of {len(JOB_STEPS)}",
         "progress": int((current_step_num / len(JOB_STEPS)) * 100),
-        "steps": steps,
+        "current_step": current_step_info
     }
 
 
