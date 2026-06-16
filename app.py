@@ -15,19 +15,19 @@ JOB_STEPS = [
     {
         "code": "data_ingestion_status",
         "event": "Data Ingestion Status",
-        "step": "Loading data. This usually takes up to 30 seconds as we collect the required information and validate it before moving to the next step.",
+        "commentary": "Loading data. This usually takes up to 30 seconds as we collect the required information and validate it before moving to the next step.",
         "agent": "Ingestion Agent"
     },
     {
         "code": "process_records",
         "event": "Process Records",
-        "step": "Processing records and validating data integrity.",
+        "commentary": "Processing records and validating data integrity.",
         "agent": "Processing Agent"
     },
     {
         "code": "report_gen",
         "event": "Generate Report",
-        "step": "Generating final report and summary.",
+        "commentary": "Generating final report and summary.",
         "agent": "Reporting Agent"
     },
 ]
@@ -45,7 +45,7 @@ def build_status_payload(elapsed, trace_id):
         entry = {
             "code": step_def["code"],
             "event": step_def["event"],
-            "step": step_def["step"],
+            "commentary": step_def["commentary"],
             "agent": step_def["agent"],
         }
 
