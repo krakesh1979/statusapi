@@ -10,7 +10,7 @@ jobs = {}
 lock = Lock()
 
 JOB_STEPS = [
-    {"event": "data_load", "step": "Load Data"},
+    {"event": "data_load", "step": "Loading data. This usually takes up to 30 seconds as we collect the required information and validate it before moving to the next step."},
     {"event": "process_records", "step": "Process Records"},
     {"event": "report_gen", "step": "Generate Report"},
 ]
